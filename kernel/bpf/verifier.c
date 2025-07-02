@@ -16248,7 +16248,29 @@ static int reg_set_min_max(struct bpf_verifier_env *env,
 		return 0;
 
 	/* fallthrough (FALSE) branch */
+	verbose(env, "false_reg2: u64=[%#llx, %#llx] "
+		     "s64=[%#llx, %#llx] u32=[%#x, %#x] s32=[%#x, %#x] var_off=(%#llx, %#llx)\n",
+		     false_reg2->umin_value, false_reg2->umax_value,
+		     false_reg2->smin_value, false_reg2->smax_value,
+		     false_reg2->u32_min_value, false_reg2->u32_max_value,
+		     false_reg2->s32_min_value, false_reg2->s32_max_value,
+		     false_reg2->var_off.value, false_reg2->var_off.mask);
+	verbose(env, "before refine: opcode=%x is_jmp32=%s u64=[%#llx, %#llx] "
+		     "s64=[%#llx, %#llx] u32=[%#x, %#x] s32=[%#x, %#x] var_off=(%#llx, %#llx)\n",
+		     opcode, is_jmp32? "true" : "false",
+		     false_reg1->umin_value, false_reg1->umax_value,
+		     false_reg1->smin_value, false_reg1->smax_value,
+		     false_reg1->u32_min_value, false_reg1->u32_max_value,
+		     false_reg1->s32_min_value, false_reg1->s32_max_value,
+		     false_reg1->var_off.value, false_reg1->var_off.mask);
+	u64 val = reg_const_value(false_reg2, is_jmp32);
+	struct tnum tmp1 = tnum_const(~val);
+	struct tnum tmp2 = tnum_and(false_reg1->var_off, tnum_const(~val));
+	verbose(env, "val=%#llx, ~val=%#llx, tnum_const(~val)=(%#llx, %#llx), "
+		     "tnum_and(...)=(%#llx, %#llx)\n",
+		     val, ~val, tmp1.value, tmp1.mask, tmp2.value, tmp2.mask);
 	regs_refine_cond_op(false_reg1, false_reg2, rev_opcode(opcode), is_jmp32);
+	reg_bounds_sanity_check(env, false_reg1, "false_reg1_unsynced");
 	reg_bounds_sync(false_reg1);
 	reg_bounds_sync(false_reg2);
 
@@ -16615,6 +16637,15 @@ static int check_cond_jmp_op(struct bpf_verifier_env *env,
 		memset(src_reg, 0, sizeof(*src_reg));
 		src_reg->type = SCALAR_VALUE;
 		__mark_reg_known(src_reg, insn->imm);
+		verbose(env, "insn->imm=%#llx, as u64: %#llx "
+			     "src_reg: u64=[%#llx, %#llx] "
+			     "s64=[%#llx, %#llx] u32=[%#x, %#x] s32=[%#x, %#x] var_off=(%#llx, %#llx)\n",
+			     insn->imm, (u64)insn->imm,
+			     src_reg->umin_value, src_reg->umax_value,
+			     src_reg->smin_value, src_reg->smax_value,
+			     src_reg->u32_min_value, src_reg->u32_max_value,
+			     src_reg->s32_min_value, src_reg->s32_max_value,
+			     src_reg->var_off.value, src_reg->var_off.mask);
 
 		if (dst_reg->type == PTR_TO_STACK)
 			insn_flags |= INSN_F_DST_REG_STACK;

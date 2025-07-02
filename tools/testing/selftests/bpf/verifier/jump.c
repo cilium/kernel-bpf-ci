@@ -395,3 +395,15 @@
 	.result = ACCEPT,
 	.retval = 2,
 },
+{
+	"invariants",
+	.insns = {
+	BPF_EMIT_CALL(BPF_FUNC_get_netns_cookie),
+	BPF_JMP_IMM(BPF_JEQ, BPF_REG_0, 0, 0),
+	BPF_JMP_IMM(BPF_JSET, BPF_REG_0, 0xffffffff, 0),
+	BPF_EXIT_INSN(),
+	},
+	.prog_type = BPF_PROG_TYPE_SCHED_CLS,
+	.flags = BPF_F_TEST_REG_INVARIANTS,
+	.result = ACCEPT,
+},
