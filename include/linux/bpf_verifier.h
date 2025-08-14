@@ -605,6 +605,8 @@ struct bpf_insn_aux_data {
 	u32 scc;
 	/* registers alive before this instruction. */
 	u16 live_regs_before;
+	/* branch depth */
+	u32 branch_depth;
 };
 
 #define MAX_USED_MAPS 64 /* max number of maps accessed by one eBPF program */

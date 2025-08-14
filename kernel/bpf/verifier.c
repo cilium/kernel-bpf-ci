@@ -16617,6 +16617,7 @@ static int check_cond_jmp_op(struct bpf_verifier_env *env,
 	struct linked_regs linked_regs = {};
 	u8 opcode = BPF_OP(insn->code);
 	int insn_flags = 0;
+	int next_insn;
 	bool is_jmp32;
 	int pred = -1;
 	int err;
@@ -16702,6 +16703,12 @@ static int check_cond_jmp_op(struct bpf_verifier_env *env,
 
 	is_jmp32 = BPF_CLASS(insn->code) == BPF_JMP32;
 	pred = is_branch_taken(dst_reg, src_reg, opcode, is_jmp32);
+	if (pred == 1)
+		next_insn = *insn_idx + insn->off + 1;
+	else if (pred == 0)
+		next_insn = *insn_idx + 1;
+	if (env->insn_aux_data[next_insn].branch_depth <= 2)
+		pred = -1;
 	if (pred >= 0) {
 		/* If we get here with a dst_reg pointer type it is because
 		 * above is_branch_taken() special cased the 0 comparison.
@@ -24384,6 +24391,40 @@ out:
 	return err;
 }
 
+static int compute_branch_depths(struct bpf_verifier_env *env)
+{
+	struct bpf_insn_aux_data *insn_aux = env->insn_aux_data;
+	struct bpf_insn *insns = env->prog->insnsi;
+	int insn_cnt = env->prog->len;
+	int i;
+
+	for (i = 0; i < env->cfg.cur_postorder; ++i) {
+		int insn_idx = env->cfg.insn_postorder[i];
+		int succ_num;
+		u32 succ[2];
+
+		succ_num = insn_successors(env->prog, insn_idx, succ);
+		for (int s = 0; s < succ_num; ++s) {
+			insn_aux[insn_idx].branch_depth += insn_aux[succ[s]].branch_depth;
+		}
+		insn_aux[insn_idx].branch_depth += 1;
+	}
+
+	if (env->log.level & BPF_LOG_LEVEL2) {
+		verbose(env, "Branch depths:\n");
+		for (i = 0; i < insn_cnt; ++i) {
+			verbose(env, "%3d: ", i);
+			verbose(env, "%d", insn_aux[i].branch_depth);
+			verbose(env, " ");
+			verbose_insn(env, &insns[i]);
+			if (bpf_is_ldimm64(&insns[i]))
+				i++;
+		}
+	}
+
+	return 0;
+}
+
 /*
  * Compute strongly connected components (SCCs) on the CFG.
  * Assign an SCC number to each instruction, recorded in env->insn_aux[*].scc.
@@ -24684,6 +24725,10 @@ int bpf_check(struct bpf_prog **prog, union bpf_attr *attr, bpfptr_t uattr, __u3
 
 	ret = check_attach_btf_id(env);
 	if (ret)
+		goto skip_full_check;
+
+	ret = compute_branch_depths(env);
+	if (ret < 0)
 		goto skip_full_check;
 
 	ret = compute_scc(env);
