@@ -1668,4 +1668,36 @@ l0_%=:	r0 = 0;				\
 	: __clobber_all);
 }
 
+SEC("sk_skb/stream_parser")
+__description("repro syzkaller")
+__flag(BPF_F_TEST_REG_INVARIANTS)
+__success __log_level(2)
+__naked void repro_syzkaller(void *ctx)
+{
+	asm volatile("			\
+	r5 = *(u32 *)(r1 +112);		\
+	r3 = *(u32 *)(r1 +108);		\
+	r0 = r10;			\
+	r0 += 85328110;			\
+	if w3 != w0 goto +1;		\
+	if w5 == 0x0 goto +0;		\
+	r6 = *(u16 *)(r1 +62);		\
+	r7 = r0;			\
+	if w5 > 0x2007ff0f goto +7;	\
+	r6 <<= 32;			\
+	w6 -= 1612244494;		\
+	r0 = r5;			\
+	r5 *= r6;			\
+	if r7 s> 0x1 goto -7;		\
+	r7 += -8243;			\
+	if w5 == w7 goto +0;		\
+	r4 = r5;			\
+	r4 += -458748;			\
+	if r3 < r4 goto +1;		\
+	exit;				\
+	if r0 == 0x0 goto +0;		\
+	exit;				\
+"	::: __clobber_all);
+}
+
 char _license[] SEC("license") = "GPL";
